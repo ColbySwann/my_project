@@ -19,9 +19,16 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
- * The SPA and this backend are different origins, so this is a classic BFF
- * (backend-for-frontend) setup: session cookie auth + CORS with credentials,
- * rather than tokens handed to the browser.
+ * Only /api/** requires authentication — everything else is the bundled
+ * storefront (see bootJar in build.gradle and SpaFallbackController), which
+ * is public, same as a real storefront's product pages.
+ *
+ * This is written as a BFF (backend-for-frontend): session cookie auth +
+ * CORS with credentials, rather than tokens handed to the browser. That
+ * only matters for local dev, where the Vite dev server (port 5173) and
+ * this backend (port 8080) are different origins — in the bundled
+ * single-jar deployment they're the same origin, so CORS is moot there but
+ * harmless to leave configured.
  */
 @Configuration
 @EnableWebSecurity
@@ -36,7 +43,12 @@ public class SecurityConfig {
       throws Exception {
     http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
         .csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()))
-        .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
+        .authorizeHttpRequests(
+            auth ->
+                auth.requestMatchers(PathPatternRequestMatcher.pathPattern("/api/**"))
+                    .authenticated()
+                    .anyRequest()
+                    .permitAll())
         .exceptionHandling(
             ex ->
                 ex.defaultAuthenticationEntryPointFor(

@@ -17,31 +17,50 @@ a Spring Boot backend for customer accounts and order history.
 - **Vitest + React Testing Library** for tests
 
 **Backend** (`backend/`)
-- **Java 21 + Spring Boot 4** (Maven)
+- **Java 21 + Spring Boot 4** (Gradle)
 - **Spring Security** as an OAuth2/OIDC *client* of Shopify's Customer Account API
   — handles customer login and order history (see below)
 - **PostgreSQL** for session storage and OAuth2 token persistence
 - **JUnit 5 + MockMvc + Mockito** for tests
 
 Package management is done with **yarn** for the frontend — don't mix in
-`npm install` (a `package-lock.json` will conflict with `yarn.lock`).
+`npm install` (a `package-lock.json` will conflict with `yarn.lock`). The
+whole repo is one Gradle build (root `build.gradle` + `backend/build.gradle`
+subproject) — `./gradlew build` from the repo root runs both frontend and
+backend tests and produces a single Spring Boot jar with the built frontend
+bundled inside it (see "Building & running as a single server" below).
 
 ## Getting started
 
+There are two ways to run this locally — pick based on what you're doing:
+
+**Iterating on the frontend (hot reload, fastest feedback):**
+
 ```bash
-# Frontend
 yarn install
 yarn dev
 
-# Backend (in another terminal) — see "Customer accounts" below for env vars
+# Backend, in another terminal — see "Customer accounts" below for env vars
 docker compose up -d postgres
 cd backend
-./mvnw spring-boot:run
+../gradlew bootRun
 ```
 
 The Vite dev server proxies `/api`, `/oauth2`, `/login`, and `/logout` to the
 backend at `http://localhost:8080` (see `vite.config.ts`), so the backend's
 session cookie stays first-party in the browser during local dev.
+
+**Running it the way it'll actually deploy (one jar, one port):**
+
+```bash
+docker compose up -d postgres
+./gradlew build
+java -jar backend/build/libs/backend-0.0.1-SNAPSHOT.jar
+```
+
+Now `http://localhost:8080` serves everything — the storefront, `/account`,
+and `/api/**` — from one process. See "Building & running as a single
+server" below for how that's wired.
 
 ## Scripts
 
@@ -54,6 +73,50 @@ session cookie stays first-party in the browser during local dev.
 | `yarn test`            | Run the test suite once                  |
 | `yarn test:watch`      | Run tests in watch mode                  |
 | `yarn test:coverage`   | Run tests with coverage report           |
+
+| Command                       | Description                                              |
+| ------------------------------ | --------------------------------------------------------- |
+| `./gradlew test`                | Run backend tests only                                    |
+| `./gradlew check`               | Run frontend *and* backend tests                          |
+| `./gradlew build`               | `check` + produce `backend/build/libs/backend-*.jar` (with the frontend bundled inside) |
+| `./gradlew :backend:bootRun`    | Run the backend alone (no frontend bundling) — use this for the two-process dev workflow above |
+| `java -jar backend/build/libs/backend-0.0.1-SNAPSHOT.jar` | Run the built single-server jar    |
+
+## Building & running as a single server
+
+`./gradlew build` from the repo root does all of this in one command:
+
+1. `frontendTest` (root `build.gradle`) — `yarn test`
+2. `:backend:test` — the JUnit suite
+3. `frontendBuild` (root `build.gradle`) — `yarn build`, producing `dist/`
+4. `:backend:bootJar` — copies `dist/` into the jar's `static/` folder and
+   packages the whole Spring Boot app, frontend included
+
+The result, `backend/build/libs/backend-0.0.1-SNAPSHOT.jar`, is a normal
+executable Spring Boot jar (`java -jar ...`) that serves the storefront,
+`/account`, and `/api/**` all from one process on one port. A few things
+had to change to make that work cleanly:
+
+- **`SecurityConfig`** now only requires authentication for `/api/**` —
+  everything else (the storefront pages) is public, same as a real
+  ecommerce site. Previously *everything* required auth, which made sense
+  when the frontend was a separate app the backend never served.
+- **`SpaFallbackController`** makes client-side routes (`/account`,
+  `/products/aloha-runner`, ...) survive a hard refresh or direct link.
+  Spring's static file handler only knows about real files (`index.html`,
+  `assets/*.js`); anything else 404s first, and this controller (which
+  implements `ErrorController`) catches that and forwards non-`/api` 404s to
+  `index.html` so React Router can take over client-side. It resets the
+  response to `200` (a servlet forward doesn't do that on its own) and has
+  a guard against forwarding to itself if `index.html` is ever missing
+  (e.g. if you run the jar without ever having built the frontend).
+- **CORS** stays configured (for the two-process dev workflow) but is moot
+  once frontend and backend are the same origin — harmless either way.
+
+This bundling logic is deliberately hooked onto `:backend:bootJar` directly
+rather than the main Java source set's resources, so plain `./gradlew
+:backend:test` / `:backend:compileJava` never need the frontend built at
+all — only packaging the final jar does.
 
 ## Shopify integration
 
@@ -124,9 +187,10 @@ so login survives backend restarts and access tokens refresh silently.
    ```
 
 4. `docker compose up -d postgres` (or point `DB_URL`/`DB_USERNAME`/`DB_PASSWORD`
-   at any Postgres instance), then `./mvnw spring-boot:run`.
+   at any Postgres instance), then `../gradlew bootRun` (from `backend/`, or
+   `./gradlew :backend:bootRun` from the repo root).
 
-Running `./mvnw test` never needs any of this — it runs under a `test` Spring
+Running `./gradlew :backend:test` never needs any of this — it runs under a `test` Spring
 profile that omits Shopify's OAuth2 registration entirely (so no live network
 call happens at test-context startup) and only needs a local Postgres for the
 session/token schema. Without credentials configured, `/api/**` still boots
@@ -143,8 +207,7 @@ test user via `backend/keycloak/realm-export.json`:
 
 ```bash
 docker compose --profile keycloak up -d
-cd backend
-SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=local ./gradlew :backend:bootRun
 ```
 
 Then visit `http://localhost:8080/oauth2/authorization/shopify` (or click
@@ -177,6 +240,9 @@ a full Shopify mock. See the comments in `application-local.yml` for details.
   orders come back empty)
 - `backend/src/main/java/.../web/AccountController.java`,
   `OrderController.java` — `GET /api/me`, `GET /api/orders`
+- `backend/src/main/java/.../web/SpaFallbackController.java` — lets client-side
+  routes survive a hard refresh once the frontend is bundled in (see
+  "Building & running as a single server" above)
 - `backend/src/main/resources/application-local.yml`,
   `backend/keycloak/realm-export.json` — the local Keycloak stand-in above
 - `src/pages/Account.tsx` — sign-in prompt / profile / order history +
@@ -199,11 +265,15 @@ src/                   # Frontend (Vite + React)
 │   └── utils.ts             # cn() class-merging helper
 └── types/                    # Shared TypeScript types
 
-backend/                # Backend (Spring Boot)
+backend/                # Backend (Spring Boot, Gradle subproject)
+├── build.gradle         # Deps + the bootJar-bundles-the-frontend wiring
 └── src/main/java/com/socktical/backend/
     ├── config/          # Security + OAuth2 client persistence config
     ├── shopify/          # Shopify Customer Account API GraphQL client
-    └── web/               # REST controllers + DTOs
+    └── web/               # REST controllers, DTOs, SpaFallbackController
+
+build.gradle             # Root: frontend test/build tasks (see above)
+settings.gradle           # Includes the `backend` subproject
 ```
 
 ## Testing
@@ -216,16 +286,18 @@ calls to Shopify are mocked — no live store or credentials required.
 yarn test
 ```
 
-**Backend** — JUnit 5 + MockMvc + Mockito, run via Maven. Needs a local
+**Backend** — JUnit 5 + MockMvc + Mockito, run via Gradle. Needs a local
 Postgres reachable at `jdbc:postgresql://localhost:5432/socktical_test`
 (`docker compose up -d postgres` and create that database, or point
 `backend/src/test/resources/application-test.yml` at your own). No Shopify
 credentials needed — the `test` profile skips that config entirely.
 
 ```bash
-cd backend
-./mvnw test
+./gradlew :backend:test
 ```
+
+**Both at once** — `./gradlew check` (or `build`, which includes it) from
+the repo root runs the frontend suite and the backend suite together.
 
 ## Adding shadcn/ui components
 

@@ -1,0 +1,57 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.socktical'
+version = '0.0.1-SNAPSHOT'
+description = 'Socktical backend — Shopify Customer Account OAuth2 login and order history, and (via bootJar) the bundled frontend static assets'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.session:spring-session-jdbc'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-restclient-test'
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
+
+// Bundles the built frontend (root ../dist, via the root project's
+// frontendBuild task) into this jar's classpath static/ folder, so one jar
+// serves both the API and the SPA on one port — see SpaFallbackController
+// for how client-side routes (e.g. /account) still resolve on a hard
+// refresh. Hooked directly onto bootJar rather than the main sourceSet's
+// resources, so plain `test`/`compileJava` never need the frontend built.
+tasks.named('bootJar') {
+    dependsOn rootProject.tasks.named('frontendBuild')
+    from(rootProject.layout.projectDirectory.dir('dist')) {
+        into 'BOOT-INF/classes/static'
+    }
+}

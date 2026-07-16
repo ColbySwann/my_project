@@ -21,8 +21,10 @@ pnpm-lock.yaml
 .env.*
 !.env.example
 
-# Backend (Maven / Spring Boot)
-backend/target/
+# Gradle (root + backend subproject)
+.gradle/
+build/
+backend/build/
 
 # Editor directories and files
 .vscode/*

@@ -31,4 +31,13 @@ class BackendApplicationTests {
   void apiEndpointsRequireAuthentication() throws Exception {
     mockMvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
   }
+
+  @Test
+  void nonApiRoutesArePublic() throws Exception {
+    // The bundled frontend isn't built in this test run, so this 404s
+    // rather than actually serving the SPA — the point here is confirming
+    // security lets it through (not 401), not exercising the SPA fallback
+    // itself (see SpaFallbackControllerTest for that).
+    mockMvc.perform(get("/account")).andExpect(status().isNotFound());
+  }
 }
