@@ -1,37 +1,89 @@
-// Root build: orchestrates the frontend (a plain Vite/yarn project, not a
-// Gradle project) alongside the `backend` Gradle subproject. Gradle
-// multi-project builds automatically aggregate a root lifecycle task
-// (check, build, ...) with the same-named task in every subproject, so
-// `./gradlew build` from the repo root already runs :backend:build too —
-// see backend/build.gradle for where the built frontend gets bundled into
-// the Spring Boot jar.
 plugins {
-    id 'base'
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
 }
 
+group = 'com.socktical'
+version = '0.0.1-SNAPSHOT'
+description = 'Socktical backend — Shopify Customer Account OAuth2 login and order history, and (via bootJar) the bundled frontend static assets'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation 'org.springframework.session:spring-session-jdbc'
+    runtimeOnly 'org.postgresql:postgresql'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-restclient-test'
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
+}
+
+// The frontend (frontend/) is a plain Vite/yarn project, not a Gradle
+// project — these are just Exec tasks shelling out to yarn in that
+// directory, wired into the normal Gradle lifecycle (check/build) below.
+def frontendDir = file('frontend')
+
 tasks.register('frontendInstall', Exec) {
-    workingDir = projectDir
+    workingDir = frontendDir
     commandLine 'yarn', 'install', '--frozen-lockfile'
-    inputs.file('package.json')
-    inputs.file('yarn.lock')
-    outputs.dir('node_modules')
+    inputs.file("$frontendDir/package.json")
+    inputs.file("$frontendDir/yarn.lock")
+    outputs.dir("$frontendDir/node_modules")
 }
 
 tasks.register('frontendTest', Exec) {
     dependsOn 'frontendInstall'
-    workingDir = projectDir
+    workingDir = frontendDir
     commandLine 'yarn', 'test'
 }
 
 tasks.register('frontendBuild', Exec) {
     dependsOn 'frontendInstall'
-    workingDir = projectDir
+    workingDir = frontendDir
     commandLine 'yarn', 'build'
-    inputs.dir('src')
-    inputs.file('vite.config.ts')
-    outputs.dir('dist')
+    inputs.dir("$frontendDir/src")
+    inputs.file("$frontendDir/vite.config.ts")
+    outputs.dir("$frontendDir/dist")
 }
 
 tasks.named('check') {
     dependsOn 'frontendTest'
+}
+
+// Bundles the built frontend (frontend/dist, via frontendBuild above) into
+// this jar's classpath static/ folder, so one jar serves both the API and
+// the SPA on one port — see SpaFallbackController for how client-side
+// routes (e.g. /account) still resolve on a hard refresh. Hooked directly
+// onto bootJar rather than the main sourceSet's resources, so plain
+// `test`/`compileJava` never need the frontend built.
+tasks.named('bootJar') {
+    dependsOn 'frontendBuild'
+    from(frontendDir.toPath().resolve('dist')) {
+        into 'BOOT-INF/classes/static'
+    }
 }

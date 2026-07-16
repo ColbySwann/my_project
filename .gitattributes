@@ -1,0 +1,8 @@
+# Unix shell scripts must keep LF line endings regardless of the checking-out
+# platform's git config — CRLF corrupts their #!/bin/sh shebang line, which
+# breaks them when run inside Linux Docker containers (see Dockerfile).
+gradlew text eol=lf
+*.sh text eol=lf
+
+# Windows' wrapper script is fine with CRLF (its own convention).
+gradlew.bat text eol=crlf
