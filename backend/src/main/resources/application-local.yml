@@ -1,0 +1,29 @@
+# Local development stand-in for Shopify's Customer Account API, using a
+# Keycloak instance (docker-compose.yml's `keycloak` service, seeded from
+# backend/keycloak/realm-export.json) as the OIDC provider instead of
+# Shopify. This exercises the whole OAuth2 login flow — redirect, callback,
+# session cookie, GET /api/me — without needing real Shopify credentials.
+#
+# What this does NOT cover: GET /api/orders still calls the real Shopify
+# Customer Account GraphQL API (app.shopify.customer-account-api-url), which
+# a Keycloak-issued access token can't authenticate against — Keycloak only
+# stands in for login, not Shopify's API. That endpoint will fail unless
+# customer-account-api-url is also pointed at a real (or mocked) endpoint.
+#
+# Usage: docker compose --profile keycloak up -d
+#        SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
+# Sign in with the seeded user: jane / jane
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          shopify:
+            client-id: socktical-backend
+            client-secret: local-dev-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid,profile,email
+        provider:
+          shopify:
+            issuer-uri: http://localhost:8081/realms/socktical

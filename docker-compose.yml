@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: socktical
+      POSTGRES_USER: socktical
+      POSTGRES_PASSWORD: socktical
+    ports:
+      - '5432:5432'
+    volumes:
+      - socktical-postgres-data:/var/lib/postgresql/data
+
+  # Stands in for Shopify's Customer Account API during local development, so
+  # the OAuth2 login flow can be exercised end-to-end without real Shopify
+  # credentials. Opt-in: `docker compose --profile keycloak up -d`. Pair with
+  # `SPRING_PROFILES_ACTIVE=local` on the backend (see application-local.yml
+  # and the README) — /api/orders will still fail against real Shopify since
+  # Keycloak only stands in for login, not the Customer Account GraphQL API.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: start-dev --import-realm
+    environment:
+      # Keycloak renamed these across major versions; setting both covers
+      # older and newer images without needing to pin an exact tag.
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - '8081:8080'
+    volumes:
+      - ./backend/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    profiles:
+      - keycloak
+
+volumes:
+  socktical-postgres-data:
