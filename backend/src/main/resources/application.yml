@@ -34,14 +34,15 @@ logging:
 
 ---
 # Shopify OAuth2/OIDC client registration. Kept in its own document, gated to
-# every profile except "test", so integration tests never trigger a live
-# OIDC discovery call against issuer-uri at context startup — see
-# SecurityConfig, which handles a missing ClientRegistrationRepository bean
-# gracefully rather than requiring one to exist.
+# every profile except "test" and "local", so integration tests and local
+# Keycloak-backed dev (see application-local.yml) never trigger a live OIDC
+# discovery call against issuer-uri at context startup — see SecurityConfig,
+# which handles a missing ClientRegistrationRepository bean gracefully
+# rather than requiring one to exist.
 spring:
   config:
     activate:
-      on-profile: '!test'
+      on-profile: '!test & !local'
   security:
     oauth2:
       client:

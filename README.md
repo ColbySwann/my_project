@@ -133,6 +133,38 @@ session/token schema. Without credentials configured, `/api/**` still boots
 fine and correctly 401s; there just isn't a login flow to reach yet, and the
 frontend's `/account` page shows a sign-in prompt.
 
+### Local dev without real Shopify credentials (Keycloak)
+
+If you just want to exercise the login flow itself — redirect, callback,
+session cookie, `GET /api/me` — without a real Shopify store, a `local`
+Spring profile points the same `shopify` OAuth2 client registration at a
+local [Keycloak](https://www.keycloak.org/) instance instead, seeded with a
+test user via `backend/keycloak/realm-export.json`:
+
+```bash
+docker compose --profile keycloak up -d
+cd backend
+SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
+```
+
+Then visit `http://localhost:8080/oauth2/authorization/shopify` (or click
+"Sign in with Shopify" on the frontend's `/account` page while it's proxied
+to this backend) and sign in with the seeded user: **jane / jane**.
+
+This only stands in for *login* — `GET /api/orders` still calls Shopify's
+real Customer Account GraphQL API, which a Keycloak-issued token can't
+authenticate against, so that endpoint will still fail under this profile.
+It's for validating the OAuth2/session/CORS/CSRF machinery in isolation, not
+a full Shopify mock. See the comments in `application-local.yml` for details.
+
+> This repo's sandboxed dev environment couldn't run Docker's daemon, so the
+> full login round-trip (Keycloak realm import → redirect → callback →
+> session) hasn't been exercised end-to-end here — only that `application-local.yml`'s
+> properties resolve correctly and correctly trigger OIDC discovery against
+> `http://localhost:8081/realms/socktical` (confirmed via the expected
+> "connection refused" when nothing's listening there yet). Worth a quick
+> manual smoke test on a machine with Docker before relying on it.
+
 ### Where it lives
 
 - `backend/src/main/java/.../config/SecurityConfig.java` — CORS, CSRF,
@@ -145,6 +177,8 @@ frontend's `/account` page shows a sign-in prompt.
   orders come back empty)
 - `backend/src/main/java/.../web/AccountController.java`,
   `OrderController.java` — `GET /api/me`, `GET /api/orders`
+- `backend/src/main/resources/application-local.yml`,
+  `backend/keycloak/realm-export.json` — the local Keycloak stand-in above
 - `src/pages/Account.tsx` — sign-in prompt / profile / order history +
   one-click "Reorder" (bulk-adds an order's variant IDs back into the
   Storefront API cart via `useCart().addItems`)
