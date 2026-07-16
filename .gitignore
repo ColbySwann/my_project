@@ -21,10 +21,9 @@ pnpm-lock.yaml
 .env.*
 !.env.example
 
-# Gradle (root + backend subproject)
+# Gradle (backend, at repo root)
 .gradle/
 build/
-backend/build/
 
 # Editor directories and files
 .vscode/*
