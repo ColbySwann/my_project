@@ -13,6 +13,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY . .
+# Guards against Windows checkouts converting gradlew's line endings to
+# CRLF, which corrupts its #!/bin/sh shebang inside this Linux stage
+# (surfaces as "./gradlew: not found" even though the file is right there).
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
 RUN ./gradlew :backend:bootJar --no-daemon
 
 # Runtime stage: just a JRE and the one jar — no Node/Gradle/build tools in
