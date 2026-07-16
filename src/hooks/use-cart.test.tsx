@@ -114,6 +114,38 @@ describe('useCart', () => {
     expect(result.current.cart?.totalQuantity).toBe(2)
   })
 
+  it('addItems creates a new cart with multiple lines at once', async () => {
+    vi.mocked(createCart).mockResolvedValue(makeCart({ totalQuantity: 2 }))
+
+    const { result } = renderHook(() => useCart(), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await act(async () => {
+      await result.current.addItems([
+        { merchandiseId: 'gid://shopify/ProductVariant/1', quantity: 1 },
+        { merchandiseId: 'gid://shopify/ProductVariant/2', quantity: 1 },
+      ])
+    })
+
+    expect(createCart).toHaveBeenCalledWith([
+      { merchandiseId: 'gid://shopify/ProductVariant/1', quantity: 1 },
+      { merchandiseId: 'gid://shopify/ProductVariant/2', quantity: 1 },
+    ])
+    expect(result.current.cart?.totalQuantity).toBe(2)
+  })
+
+  it('addItems is a no-op when given an empty list', async () => {
+    const { result } = renderHook(() => useCart(), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+
+    await act(async () => {
+      await result.current.addItems([])
+    })
+
+    expect(createCart).not.toHaveBeenCalled()
+    expect(addCartLines).not.toHaveBeenCalled()
+  })
+
   it('updateItem is a no-op without a cart', async () => {
     const { result } = renderHook(() => useCart(), { wrapper })
     await waitFor(() => expect(result.current.isLoading).toBe(false))

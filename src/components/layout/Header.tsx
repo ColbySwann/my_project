@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Menu, ShoppingBag } from 'lucide-react'
+import { Menu, ShoppingBag, User } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import {
@@ -39,6 +39,12 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/account" aria-label="Account">
+              <User />
+            </Link>
+          </Button>
+
           <Button variant="ghost" size="icon" asChild>
             <Link to="/cart" aria-label="Cart">
               <ShoppingBag />

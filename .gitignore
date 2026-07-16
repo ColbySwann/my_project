@@ -21,6 +21,9 @@ pnpm-lock.yaml
 .env.*
 !.env.example
 
+# Backend (Maven / Spring Boot)
+backend/target/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

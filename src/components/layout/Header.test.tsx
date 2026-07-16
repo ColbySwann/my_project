@@ -26,6 +26,12 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Cart' })).toHaveAttribute('href', '/cart')
   })
 
+  it('renders an account link', () => {
+    renderHeader()
+
+    expect(screen.getByRole('link', { name: 'Account' })).toHaveAttribute('href', '/account')
+  })
+
   it('opens the mobile nav sheet when the menu button is clicked', async () => {
     const user = userEvent.setup()
     renderHeader()

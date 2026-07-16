@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: socktical-backend
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/socktical}
+    username: ${DB_USERNAME:socktical}
+    password: ${DB_PASSWORD:socktical}
+
+  session:
+    store-type: jdbc
+    jdbc:
+      # Schema is initialized once below via spring.sql.init instead, using an
+      # idempotent script — see db/schema-postgres.sql for why.
+      initialize-schema: never
+
+  sql:
+    init:
+      mode: always
+      schema-locations:
+        - classpath:db/schema-postgres.sql
+
+app:
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+  shopify:
+    customer-account-api-url: ${SHOPIFY_CUSTOMER_ACCOUNT_API_URL:}
+
+server:
+  port: ${PORT:8080}
+
+logging:
+  level:
+    org.springframework.security: INFO
+
+---
+# Shopify OAuth2/OIDC client registration. Kept in its own document, gated to
+# every profile except "test", so integration tests never trigger a live
+# OIDC discovery call against issuer-uri at context startup — see
+# SecurityConfig, which handles a missing ClientRegistrationRepository bean
+# gracefully rather than requiring one to exist.
+spring:
+  config:
+    activate:
+      on-profile: '!test'
+  security:
+    oauth2:
+      client:
+        registration:
+          shopify:
+            client-id: ${SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID}
+            client-secret: ${SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+            scope: openid,email,customer-account-api:full
+        provider:
+          shopify:
+            # Shopify's Customer Account API is OIDC-compliant. The issuer below
+            # is discovered from your store's Headless channel > Customer Account
+            # API settings in the Shopify admin — copy it exactly from there.
+            issuer-uri: ${SHOPIFY_CUSTOMER_ACCOUNT_ISSUER_URI}

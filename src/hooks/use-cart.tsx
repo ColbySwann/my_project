@@ -8,6 +8,7 @@ import {
 } from 'react'
 
 import { addCartLines, createCart, getCart, removeCartLines, updateCartLines } from '@/lib/shopify'
+import type { CartLineInput } from '@/lib/shopify/cart'
 import type { Cart } from '@/types/shopify'
 
 const CART_ID_STORAGE_KEY = 'socktical:cartId'
@@ -16,6 +17,7 @@ interface CartContextValue {
   cart: Cart | null
   isLoading: boolean
   addItem: (merchandiseId: string, quantity?: number) => Promise<void>
+  addItems: (lines: CartLineInput[]) => Promise<void>
   updateItem: (lineId: string, quantity: number) => Promise<void>
   removeItem: (lineId: string) => Promise<void>
 }
@@ -63,6 +65,22 @@ export function CartProvider({ children }: { children: ReactNode }) {
     [cart],
   )
 
+  const addItems = useCallback(
+    async (lines: CartLineInput[]) => {
+      if (lines.length === 0) return
+      setIsLoading(true)
+      try {
+        const nextCart = cart ? await addCartLines(cart.id, lines) : await createCart(lines)
+
+        localStorage.setItem(CART_ID_STORAGE_KEY, nextCart.id)
+        setCart(nextCart)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [cart],
+  )
+
   const updateItem = useCallback(
     async (lineId: string, quantity: number) => {
       if (!cart) return
@@ -90,7 +108,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <CartContext.Provider value={{ cart, isLoading, addItem, updateItem, removeItem }}>
+    <CartContext.Provider value={{ cart, isLoading, addItem, addItems, updateItem, removeItem }}>
       {children}
     </CartContext.Provider>
   )

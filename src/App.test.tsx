@@ -1,17 +1,31 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 import App from './App'
+import { CartProvider } from '@/hooks/use-cart'
 
 vi.mock('@/lib/shopify', () => ({
   getProducts: vi.fn().mockRejectedValue(new Error('not configured')),
 }))
 
+beforeEach(() => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue({ status: 401, ok: false } as Response),
+  )
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <App />
+      <CartProvider>
+        <App />
+      </CartProvider>
     </MemoryRouter>,
   )
 }
@@ -39,6 +53,12 @@ describe('App routing', () => {
     renderAt('/cart')
 
     expect(screen.getByText(/cart — coming soon/i)).toBeInTheDocument()
+  })
+
+  it('renders the account page at /account', async () => {
+    renderAt('/account')
+
+    expect(await screen.findByRole('heading', { name: /sign in to your account/i })).toBeInTheDocument()
   })
 
   it('renders the not found page for unknown routes', () => {
